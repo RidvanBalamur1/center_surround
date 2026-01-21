@@ -1,0 +1,24 @@
+# Data and outputs
+data/
+outputs/
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.eggs/
+
+# Environment
+.venv/
+venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
