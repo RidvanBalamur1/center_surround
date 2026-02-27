@@ -8,9 +8,9 @@ from PIL import Image
 import cv2
 
 from center_surround.data import load_raw_data, create_dataloaders
-from center_surround.models import KlindtCoreReadout2D
+from center_surround.models.klindtSurround import KlindtCoreReadoutONOFFMixed2D
 from center_surround.training import train
-from center_surround.utils import plot_kernels, plot_spatial_masks
+from center_surround.utils import plot_kernels, plot_spatial_masks_onoff_mixed
 from center_surround.utils import compute_lsta, plot_lsta_comparison_per_cell
 from center_surround.utils import (
     compute_metrics,
@@ -24,29 +24,37 @@ from center_surround.utils import (
     plot_grid_predictions,
 )
 
+# Model name
+model_name = "klindtONOFFMixed"
+
+# Data path
+data_path_file = "exp_13_data_4"
+
 # Device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {device}")
 
-# Create output directory with timestamp at the start
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-output_dir = f'/home/ridvan/Documents/center_surround/outputs/run_{timestamp}'
-os.makedirs(output_dir, exist_ok=True)
-print(f"Output directory: {output_dir}")
-
-# Load best hyperparameters
-with open('/home/ridvan/Documents/center_surround/outputs/hyperparam_results.pkl', 'rb') as f:
+# Load best hyperparameters from ON/OFF model search (reuse same hyperparams)
+hyperparam_path = f'/home/ridvan/Documents/center_surround/outputs/{data_path_file}/klindtONOFF/hyperparam_results_latest.pkl'
+with open(hyperparam_path, 'rb') as f:
     results = pickle.load(f)
 
 best_params = results['best_params']
+print(f"Loaded hyperparameters from: {hyperparam_path}")
 print("Best hyperparameters:")
 for key, value in best_params.items():
     print(f"  {key}: {value}")
 
 # Load data
-data_path = "/home/ridvan/Documents/center_surround/data/exp_13_data_4.pkl"
+data_path = f"/home/ridvan/Documents/center_surround/data/{data_path_file}.pkl"
 raw_data = load_raw_data(data_path)
 dataloaders = create_dataloaders(raw_data, batch_size=32, normalize_images=True)
+
+# Create output directory with timestamp at the start
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+output_dir = f'/home/ridvan/Documents/center_surround/outputs/{data_path_file}/{model_name}/run_{timestamp}'
+os.makedirs(output_dir, exist_ok=True)
+print(f"Output directory: {output_dir}")
 
 # Get shapes
 images, responses = next(iter(dataloaders['train']))
@@ -58,29 +66,28 @@ print(f"\nInput: {in_channels} channels, {input_size}x{input_size}")
 print(f"Neurons: {num_neurons}")
 
 # Cell IDs used in your model (must match order of neurons in data)
-# picked_cells = [187, 478, 684, 721, 723, 1036, 1091, 1260, 1443, 1506] Data set 1,2
 picked_cells = [23, 27, 63, 75, 89, 90, 122, 129, 143, 148, 169, 212, 221, 312, 402, 441, 478, 500,
                 507, 542, 582, 614, 676, 684, 721, 723, 755, 761, 807, 813, 881, 964,
                 1054, 1056, 1059, 1091, 1122, 1145, 1156, 1189, 1200, 1262, 1278, 1317, 1429,
                 1437, 1441, 1443, 1487, 1538, 1554, 1587, 1593, 1598, 1662, 1705]
 
 
-# Model configuration
+# Model configuration - using tuned hyperparameters from search
+# Using ON/OFF kernel polarity with 2 ON and 2 OFF kernels + Mixed pathway
 model_config = {
     'image_size': input_size,
     'image_channels': in_channels,
     'kernel_sizes': [24, 24],
-    'num_kernels': [4],
+    'n_on_kernels': 2,   # 2 ON kernels (positive weights)
+    'n_off_kernels': 2,  # 2 OFF kernels (negative weights)
     'act_fns': ['relu'],
     'init_scales': [[0.0, 0.01], [0.0, 0.001], [0.0, 0.01]],
     'init_kernels': f"gaussian:0.28",  # single Gaussian (center only)
-    # 'init_kernels': f"gaussian:{best_params['init_kernels_sigma']}",  # single Gaussian (center only)
-    # 'init_kernels': "dog:0.15:0.4:0.6",  # DoG: center_sigma:surround_sigma:amp_ratio
     'num_neurons': num_neurons,
     'smoothness_reg': best_params['smoothness_reg'],
     'sparsity_reg': 0,
-    'center_mass_reg': 0,#best_params['center_mass_reg'],
-    'mask_reg': 1e-4,
+    'center_mass_reg': 0,
+    'mask_reg': best_params['mask_reg'],
     'weights_reg': best_params['weights_reg'],
     'dropout_rate': 0.2,
     'batch_norm': True,
@@ -106,12 +113,13 @@ with open(f'{output_dir}/config.pkl', 'wb') as f:
     pickle.dump(config, f)
 print(f"Config saved to {output_dir}/config.pkl")
 
-# Create model with best parameters
-model = KlindtCoreReadout2D(
+# Create model with best parameters (ON/OFF kernel polarity + Mixed pathway)
+model = KlindtCoreReadoutONOFFMixed2D(
     image_size=model_config['image_size'],
     image_channels=model_config['image_channels'],
     kernel_sizes=model_config['kernel_sizes'],
-    num_kernels=model_config['num_kernels'],
+    n_on_kernels=model_config['n_on_kernels'],
+    n_off_kernels=model_config['n_off_kernels'],
     act_fns=model_config['act_fns'],
     init_scales=model_config['init_scales'],
     init_kernels=model_config['init_kernels'],
@@ -131,10 +139,9 @@ model = KlindtCoreReadout2D(
     seed=model_config['seed'],
 )
 
-# Train with more epochs
+# Train with more epochs using tuned learning rate
 print("\nTraining final model...")
-# model = train(model, dataloaders, num_epochs=100, lr=best_params['learning_rate'], device=device, early_stopping=False)
-model = train(model, dataloaders, num_epochs=100, lr=0.02, device=device, early_stopping=False)
+model = train(model, dataloaders, num_epochs=100, lr=best_params['learning_rate'], device=device, early_stopping=False)
 
 # Check validation correlation first
 print("\nValidation set evaluation:")
@@ -167,7 +174,6 @@ correlations = metrics['correlation_per_neuron']
 print("\nPlotting predictions...")
 fig1 = plot_predictions_grid(predictions, targets, correlations)
 fig1.savefig(f'{output_dir}/predictions.png', dpi=150, bbox_inches='tight')
-# plt.show()
 
 # Plot correlation distribution
 print("\nPlotting correlation distribution...")
@@ -183,9 +189,11 @@ plt.close(fig_example)
 
 # Plot grid predictions (all neurons)
 print("\nPlotting grid predictions...")
+grid_preds_dir = f'{output_dir}/grid_predictions'
+os.makedirs(grid_preds_dir, exist_ok=True)
 grid_figs = plot_grid_predictions(predictions, targets, correlations)
 for i, fig in enumerate(grid_figs):
-    fig.savefig(f'{output_dir}/grid_predictions_{i}.png', dpi=150, bbox_inches='tight')
+    fig.savefig(f'{grid_preds_dir}/grid_predictions_{i}.png', dpi=150, bbox_inches='tight')
     plt.close(fig)
 
 # Plot correlation vs reliability (with reliability-dependent plots)
@@ -225,17 +233,19 @@ if 'responses_test_by_trial' in raw_data:
     fig_example_rel.savefig(f'{output_dir}/example_predictions_with_reliability.png', dpi=150, bbox_inches='tight')
     plt.close(fig_example_rel)
 
-# Plot kernels
+# Plot kernels (should show ON kernels with positive values, OFF kernels with negative values)
 print("\nPlotting kernels...")
 fig3 = plot_kernels(model)
 fig3.savefig(f'{output_dir}/kernels.png', dpi=150, bbox_inches='tight')
-# plt.show()
 
-# Plot spatial masks
-print("\nPlotting spatial masks...")
-fig4 = plot_spatial_masks(model)
-fig4.savefig(f'{output_dir}/spatial_masks.png', dpi=150, bbox_inches='tight')
-# plt.show()
+# Plot ON/OFF/Mixed spatial masks
+print("\nPlotting ON/OFF/Mixed spatial masks...")
+spatial_masks_dir = f'{output_dir}/spatial_masks'
+os.makedirs(spatial_masks_dir, exist_ok=True)
+spatial_mask_figs = plot_spatial_masks_onoff_mixed(model, neurons_per_plot=8)
+for i, fig in enumerate(spatial_mask_figs):
+    fig.savefig(f'{spatial_masks_dir}/spatial_masks_onoff_mixed_{i}.png', dpi=150, bbox_inches='tight')
+    plt.close(fig)
 
 # Compute LSTA on NATURAL IMAGES (not test images)
 print("\nComputing LSTA...")
@@ -269,7 +279,7 @@ for img_num in img_numbers:
     lsta_images.append(img_data)
 
 lsta_images = np.array(lsta_images)  # [4, 1, 108, 108]
-    
+
 # Load RF fits for ellipse overlay
 rf_fits_path = '/home/ridvan/Documents/exp/13_exp/20251208/Analysis/Chirp_Checkerboard_Analysis_mix/sta_data_mix.pkl'
 with open(rf_fits_path, 'rb') as f:
@@ -310,7 +320,7 @@ saved_paths = plot_lsta_comparison_per_cell(
 print(f"Saved {len(saved_paths)} LSTA comparison plots to {output_dir}/lsta_per_cell/")
 
 # Save the trained model
-model_path = f'{output_dir}/best_model_1.pth'
+model_path = f'{output_dir}/best_model_onoff_mixed.pth'
 torch.save(model.state_dict(), model_path)
 print(f"\nModel saved to {model_path}")
 
@@ -330,7 +340,7 @@ print(f"\n{'='*50}")
 print(f"All outputs saved to {output_dir}")
 print(f"{'='*50}")
 print(f"  - config.pkl (model config, hyperparameters, cell IDs)")
-print(f"  - best_model.pth (trained model weights)")
+print(f"  - best_model_onoff_mixed.pth (trained model weights)")
 print(f"  - results.pkl (metrics, predictions, correlations)")
 print(f"  - predictions.png (response curves)")
 print(f"  - correlation_distribution.png")
@@ -340,9 +350,6 @@ print(f"  - correlation_vs_reliability.png (with trend line)")
 print(f"  - reliability_distribution.png")
 print(f"  - fraction_of_ceiling.png")
 print(f"  - example_predictions_with_reliability.png")
-print(f"  - kernels.png")
-print(f"  - spatial_masks.png")
+print(f"  - kernels.png (ON kernels: positive, OFF kernels: negative)")
+print(f"  - spatial_masks_onoff_mixed_*.png (ON mask, OFF mask, Mixed mask per neuron)")
 print(f"  - lsta_per_cell/ (LSTA comparison plots)")
-
-
-

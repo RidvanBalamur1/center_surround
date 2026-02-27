@@ -7,7 +7,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {device}")
 
 # Load data
-data_path = "data/exp_13_data_1.pkl"
+data_path = "data/exp_13_data_3.pkl"
 raw_data = load_raw_data(data_path)
 dataloaders = create_dataloaders(raw_data, batch_size=32, normalize_images=True)
 # Get shapes
@@ -27,8 +27,8 @@ results = run_hyperparameter_search(
     in_channels=in_channels,
     num_neurons=num_neurons,
     device=device,
-    n_trials=400,      # number of trials
-    num_epochs=100,    # epochs per trial
+    n_trials=100,      # number of trials
+    num_epochs=200,    # epochs per trial
 )
 
 print("\n" + "="*50)
@@ -41,6 +41,6 @@ for key, value in results['best_params'].items():
 
 # Save results
 import pickle
-with open('/home/ridvan/Documents/center_surround/outputs/hyperparam_results_1.pkl', 'wb') as f:
+with open('/home/ridvan/Documents/center_surround/outputs/hyperparam_results.pkl', 'wb') as f:
     pickle.dump(results, f)
-print("\nResults saved to outputs/hyperparam_results_1.pkl")
+print("\nResults saved to outputs/hyperparam_results.pkl")

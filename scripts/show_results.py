@@ -1,6 +1,6 @@
 import pickle
 
-with open('/home/ridvan/Documents/center_surround/outputs/hyperparam_results.pkl', 'rb') as f:
+with open('/home/ridvan/Documents/center_surround/exp_13_data_old_1_2_3_4/hyperparam_results.pkl', 'rb') as f:
     results = pickle.load(f)
 
 print("="*50)

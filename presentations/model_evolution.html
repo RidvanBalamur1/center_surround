@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Center-Surround Model Evolution</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            overflow: hidden;
+        }
+        .slide {
+            display: none;
+            width: 100vw;
+            height: 100vh;
+            padding: 60px 80px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        }
+        .slide.active {
+            display: flex;
+            flex-direction: column;
+        }
+        h1 {
+            font-size: 2.8em;
+            color: #e94560;
+            margin-bottom: 20px;
+            border-bottom: 3px solid #e94560;
+            padding-bottom: 15px;
+        }
+        h2 {
+            font-size: 2em;
+            color: #0f3460;
+            background: #e94560;
+            padding: 10px 20px;
+            border-radius: 5px;
+            margin-bottom: 30px;
+            display: inline-block;
+        }
+        h3 {
+            font-size: 1.5em;
+            color: #e94560;
+            margin: 20px 0 10px 0;
+        }
+        p, li {
+            font-size: 1.3em;
+            line-height: 1.6;
+            margin: 10px 0;
+        }
+        ul {
+            margin-left: 40px;
+        }
+        pre {
+            background: #0f3460;
+            padding: 20px;
+            border-radius: 10px;
+            font-size: 0.9em;
+            overflow-x: auto;
+            margin: 15px 0;
+            border-left: 4px solid #e94560;
+        }
+        code {
+            font-family: 'Consolas', 'Monaco', monospace;
+            color: #00ff88;
+        }
+        table {
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 1.1em;
+            width: 100%;
+        }
+        th, td {
+            border: 1px solid #e94560;
+            padding: 12px 15px;
+            text-align: left;
+        }
+        th {
+            background: #e94560;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background: rgba(233, 69, 96, 0.1);
+        }
+        .controls {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            display: flex;
+            gap: 10px;
+            z-index: 100;
+        }
+        .controls button {
+            padding: 15px 25px;
+            font-size: 1.2em;
+            background: #e94560;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .controls button:hover {
+            background: #ff6b6b;
+            transform: scale(1.05);
+        }
+        .progress {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            height: 5px;
+            background: #e94560;
+            transition: width 0.3s;
+        }
+        .slide-number {
+            position: fixed;
+            bottom: 30px;
+            left: 30px;
+            font-size: 1.2em;
+            color: #888;
+        }
+        .two-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            flex: 1;
+        }
+        .highlight {
+            background: rgba(233, 69, 96, 0.3);
+            padding: 2px 8px;
+            border-radius: 3px;
+        }
+        .center {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+        .title-slide h1 {
+            font-size: 3.5em;
+            border: none;
+            margin-bottom: 30px;
+        }
+        .title-slide h2 {
+            background: none;
+            color: #aaa;
+            font-size: 1.8em;
+        }
+        .architecture-box {
+            background: #0f3460;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+            border: 2px solid #e94560;
+        }
+        .flex-grow {
+            flex: 1;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Slide 1: Title -->
+<div class="slide active center title-slide">
+    <h1>Center-Surround Model Evolution</h1>
+    <h2>From Classical Klindt to Dedicated ON/OFF Mixed</h2>
+    <p style="margin-top: 50px; color: #888;">Use arrow keys or buttons to navigate</p>
+</div>
+
+<!-- Slide 2: Overview -->
+<div class="slide">
+    <h1>Overview</h1>
+    <div class="flex-grow">
+        <ul>
+            <li><strong>Problem:</strong> Modeling retinal ganglion cell receptive fields</li>
+            <li><strong>Challenge:</strong> Capturing spatial structure + polarity (ON/OFF)</li>
+            <li><strong>Solution:</strong> Progressive model refinement</li>
+        </ul>
+        <div class="architecture-box" style="margin-top: 40px;">
+            <pre><code>┌─────────────┐     ┌────────────────┐     ┌────────────┐
+│   Image     │ --> │  Core (Conv)   │ --> │  Readout   │ --> Neural Response
+│   Input     │     │  (Kernels)     │     │  (Masks)   │
+└─────────────┘     └────────────────┘     └────────────┘</code></pre>
+        </div>
+        <h3>Key Components:</h3>
+        <ul>
+            <li><strong>Core:</strong> Convolutional kernels extract features</li>
+            <li><strong>Readout:</strong> Spatial masks pool features for each neuron</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Slide 3: Classical Klindt -->
+<div class="slide">
+    <h1>Model 1: Classical Klindt</h1>
+    <div class="flex-grow">
+        <div class="architecture-box">
+            <pre><code>┌─────────────┐     ┌────────────────┐     ┌────────────┐
+│   Image     │ --> │  4 Kernels     │ --> │  1 Shared  │ --> Output
+│             │     │  (no polarity) │     │   Mask     │
+└─────────────┘     └────────────────┘     └────────────┘</code></pre>
+        </div>
+        <div class="two-column">
+            <div>
+                <h3>Properties</h3>
+                <ul>
+                    <li><strong>Kernels:</strong> 4 unconstrained</li>
+                    <li><strong>Masks:</strong> 1 shared across all channels</li>
+                    <li><strong>Parameters:</strong> Minimal</li>
+                </ul>
+            </div>
+            <div>
+                <h3>Limitation</h3>
+                <ul>
+                    <li>Cannot capture spatially distinct ON/OFF regions</li>
+                    <li>Single mask forces uniform spatial pooling</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 4: N-Masks -->
+<div class="slide">
+    <h1>Model 2: N-Masks (Surround Model)</h1>
+    <div class="flex-grow">
+        <div class="architecture-box">
+            <pre><code>┌─────────────┐     ┌────────────────┐     ┌─────────────────────┐
+│   Image     │ --> │  4 Kernels     │ --> │  2 Spatial Masks    │ --> Output
+│             │     │                │     │  (Center + Surround)│
+└─────────────┘     └────────────────┘     └─────────────────────┘</code></pre>
+        </div>
+        <div class="two-column">
+            <div>
+                <h3>Properties</h3>
+                <ul>
+                    <li><strong>Kernels:</strong> 4 unconstrained</li>
+                    <li><strong>Masks:</strong> N configurable (typically 2)</li>
+                    <li><strong>Each mask:</strong> Pools from ALL channels</li>
+                </ul>
+            </div>
+            <div>
+                <h3>Use Case</h3>
+                <ul>
+                    <li>Mask 1 = center location</li>
+                    <li>Mask 2 = surround location</li>
+                    <li><span class="highlight">Limitation:</span> No explicit ON/OFF polarity</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 5: ON/OFF Model -->
+<div class="slide">
+    <h1>Model 3: ON/OFF Model</h1>
+    <div class="flex-grow">
+        <h3>Key Innovation: Explicit Polarity Constraints</h3>
+        <div class="architecture-box">
+            <pre><code>                                            ┌─────────────────────┐
+                   ┌────────────────────┐   │  ON Mask            │
+                   │  ON Kernels (2)    │-->│  (pools ON only)    │──┐
+┌─────────────┐    │  [positive wts]    │   └─────────────────────┘  │
+│   Image     │ -->│                    │                            │--> Output
+│             │    │  OFF Kernels (2)   │   ┌─────────────────────┐  │
+└─────────────┘    │  [negative wts]    │-->│  OFF Mask           │──┘
+                   └────────────────────┘   │  (pools OFF only)   │
+                                            └─────────────────────┘</code></pre>
+        </div>
+        <ul>
+            <li><strong>ON Kernels:</strong> Constrained positive weights (detect light increments)</li>
+            <li><strong>OFF Kernels:</strong> Constrained negative weights (detect light decrements)</li>
+            <li><span class="highlight">Limitation:</span> Cannot model ON-OFF cells at same spatial location</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Slide 6: ON/OFF Mixed -->
+<div class="slide">
+    <h1>Model 4: ON/OFF Mixed (Shared Kernels)</h1>
+    <div class="flex-grow">
+        <div class="architecture-box">
+            <pre><code>                                            ┌─────────────────────┐
+                   ┌────────────────────┐   │  ON Mask            │──┐
+                   │  ON Kernels (2)    │-->│  (all ON kernels)   │  │
+┌─────────────┐    │  [positive wts]    │   ├─────────────────────┤  │
+│   Image     │ -->│                    │-->│  Mixed Mask         │──┼--> Output
+│             │    │  OFF Kernels (2)   │   │  (1 ON + 1 OFF)     │  │
+└─────────────┘    │  [negative wts]    │-->├─────────────────────┤  │
+                   └────────────────────┘   │  OFF Mask           │──┘
+                                            └─────────────────────┘</code></pre>
+        </div>
+        <h3 style="color: #ff6b6b;">Problem: Conflicting Optimization</h3>
+        <pre><code>ON Kernel 0 must satisfy:
+  ├── ON mask: "be a good ON detector for pure ON cells"
+  └── Mixed mask: "be a good ON component for ON-OFF cells"
+
+These may require DIFFERENT spatial structures!</code></pre>
+    </div>
+</div>
+
+<!-- Slide 7: Dedicated ON/OFF Mixed -->
+<div class="slide">
+    <h1>Model 5: Dedicated ON/OFF Mixed</h1>
+    <div class="flex-grow">
+        <h3 style="color: #00ff88;">Solution: Dedicated Kernels per Pathway</h3>
+        <div class="architecture-box">
+            <pre><code>                                            ┌─────────────────────┐
+                   ┌────────────────────┐   │  ON Mask            │──┐
+                   │  ON Kernels (0,1)  │-->│  (kernels 0,1 ONLY) │  │
+                   │  [positive wts]    │   └─────────────────────┘  │
+┌─────────────┐    ├────────────────────┤   ┌─────────────────────┐  │
+│   Image     │ -->│  OFF Kernels (2,3) │-->│  OFF Mask           │──┼--> Output
+│             │    │  [negative wts]    │   │  (kernels 2,3 ONLY) │  │
+└─────────────┘    ├────────────────────┤   └─────────────────────┘  │
+                   │  Mixed Kernels(4,5)│   ┌─────────────────────┐  │
+                   │  [1 pos + 1 neg]   │-->│  Mixed Mask         │──┘
+                   └────────────────────┘   │  (kernels 4,5 ONLY) │
+                                            └─────────────────────┘</code></pre>
+        </div>
+        <p style="font-size: 1.4em; color: #00ff88;"><strong>Key Insight: No kernel serves multiple masters!</strong></p>
+    </div>
+</div>
+
+<!-- Slide 8: Kernel Allocation -->
+<div class="slide">
+    <h1>Dedicated Model: Kernel Allocation</h1>
+    <div class="flex-grow">
+        <table>
+            <tr>
+                <th>Kernel Index</th>
+                <th>Polarity</th>
+                <th>Dedicated To</th>
+            </tr>
+            <tr>
+                <td>0, 1</td>
+                <td>Positive (ON)</td>
+                <td>ON Mask only</td>
+            </tr>
+            <tr>
+                <td>2, 3</td>
+                <td>Negative (OFF)</td>
+                <td>OFF Mask only</td>
+            </tr>
+            <tr>
+                <td>4</td>
+                <td>Positive (ON-like)</td>
+                <td>Mixed Mask only</td>
+            </tr>
+            <tr>
+                <td>5</td>
+                <td>Negative (OFF-like)</td>
+                <td>Mixed Mask only</td>
+            </tr>
+        </table>
+        <h3>Benefits</h3>
+        <ul>
+            <li>Each pathway optimizes its own features</li>
+            <li>No conflicting gradients during training</li>
+            <li>Cleaner learned representations</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Slide 9: Comparison Table -->
+<div class="slide">
+    <h1>Architecture Comparison</h1>
+    <div class="flex-grow">
+        <table>
+            <tr>
+                <th>Model</th>
+                <th>Kernels</th>
+                <th>Masks</th>
+                <th>Polarity</th>
+                <th>Kernel Sharing</th>
+            </tr>
+            <tr>
+                <td>Classical</td>
+                <td>4</td>
+                <td>1</td>
+                <td>None</td>
+                <td>N/A</td>
+            </tr>
+            <tr>
+                <td>N-Masks</td>
+                <td>4</td>
+                <td>N</td>
+                <td>None</td>
+                <td>All shared</td>
+            </tr>
+            <tr>
+                <td>ON/OFF</td>
+                <td>4</td>
+                <td>2</td>
+                <td>Explicit</td>
+                <td>Pathway-dedicated</td>
+            </tr>
+            <tr>
+                <td>ON/OFF Mixed</td>
+                <td>4</td>
+                <td>3</td>
+                <td>Explicit</td>
+                <td>Mixed shares</td>
+            </tr>
+            <tr style="background: rgba(0, 255, 136, 0.2);">
+                <td><strong>Dedicated</strong></td>
+                <td><strong>6</strong></td>
+                <td><strong>3</strong></td>
+                <td><strong>Explicit</strong></td>
+                <td><strong>None</strong></td>
+            </tr>
+        </table>
+    </div>
+</div>
+
+<!-- Slide 10: Evolution Summary -->
+<div class="slide">
+    <h1>Design Evolution Summary</h1>
+    <div class="flex-grow center">
+        <div class="architecture-box" style="font-size: 1.2em;">
+            <pre><code>Classical Klindt
+      │
+      ▼ "Need spatial separation"
+N-Masks (Surround)
+      │
+      ▼ "Need polarity constraints"
+ON/OFF Model
+      │
+      ▼ "Can't model ON-OFF cells"
+ON/OFF Mixed (Shared)
+      │
+      ▼ "Conflicting optimization"
+<span style="color: #00ff88;">Dedicated ON/OFF Mixed  ✓</span></code></pre>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 11: Visualization -->
+<div class="slide">
+    <h1>Visualization: Spatial Masks</h1>
+    <div class="flex-grow">
+        <h3>RGB Overlay: R=ON, G=Mixed, B=OFF</h3>
+        <div class="architecture-box">
+            <pre><code>┌─────────────────────────────────────┐
+│                                     │
+│        Pure Red    = ON only        │
+│        Pure Blue   = OFF only       │
+│        Pure Green  = Mixed only     │
+│        Yellow      = ON + Mixed     │
+│        Cyan        = OFF + Mixed    │
+│        White       = All three      │
+│                                     │
+└─────────────────────────────────────┘
+
+Shows spatial alignment of different pathways</code></pre>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 12: Key Takeaways -->
+<div class="slide">
+    <h1>Key Takeaways</h1>
+    <div class="flex-grow">
+        <div class="two-column">
+            <div>
+                <h3>1. Biological Constraints Help</h3>
+                <ul>
+                    <li>Explicit ON/OFF polarity improves interpretability</li>
+                    <li>Matches known retinal circuitry</li>
+                </ul>
+                <h3>2. Dedicated Resources</h3>
+                <ul>
+                    <li>Shared kernels create optimization pressure</li>
+                    <li>Dedicated kernels allow clean specialization</li>
+                </ul>
+            </div>
+            <div>
+                <h3>3. Trade-off</h3>
+                <ul>
+                    <li>6 kernels > 4 kernels</li>
+                    <li>But cleaner training dynamics</li>
+                </ul>
+                <h3>4. Visualization Matters</h3>
+                <ul>
+                    <li>RGB overlay reveals spatial relationships</li>
+                    <li>Cell classification validates model behavior</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 13: Thank You -->
+<div class="slide center">
+    <h1>Thank You</h1>
+    <div style="margin-top: 40px;">
+        <h3>Code Repository Structure</h3>
+        <div class="architecture-box" style="text-align: left;">
+            <pre><code>center_surround/
+├── models/
+│   ├── klindt.py           # Classical model
+│   └── klindtSurround.py   # All variants
+├── training/
+│   └── search.py           # Hyperparameter search
+├── utils/
+│   └── visualization.py    # Plotting functions
+└── scripts/
+    ├── klindtSurround/
+    ├── klindtONOFF/
+    ├── klindtONOFFMixed/
+    └── klindtDedicatedONOFFMixed/</code></pre>
+        </div>
+    </div>
+</div>
+
+<!-- Controls -->
+<div class="controls">
+    <button onclick="prevSlide()">&#8592; Prev</button>
+    <button onclick="nextSlide()">Next &#8594;</button>
+</div>
+
+<div class="progress" id="progress"></div>
+<div class="slide-number" id="slideNumber"></div>
+
+<script>
+    let currentSlide = 0;
+    const slides = document.querySelectorAll('.slide');
+    const progress = document.getElementById('progress');
+    const slideNumber = document.getElementById('slideNumber');
+
+    function showSlide(n) {
+        slides[currentSlide].classList.remove('active');
+        currentSlide = (n + slides.length) % slides.length;
+        slides[currentSlide].classList.add('active');
+        progress.style.width = ((currentSlide + 1) / slides.length * 100) + '%';
+        slideNumber.textContent = (currentSlide + 1) + ' / ' + slides.length;
+    }
+
+    function nextSlide() {
+        showSlide(currentSlide + 1);
+    }
+
+    function prevSlide() {
+        showSlide(currentSlide - 1);
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === ' ') nextSlide();
+        if (e.key === 'ArrowLeft') prevSlide();
+    });
+
+    // Initialize
+    showSlide(0);
+</script>
+
+</body>
+</html>

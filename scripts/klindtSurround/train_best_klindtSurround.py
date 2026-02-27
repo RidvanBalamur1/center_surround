@@ -8,9 +8,9 @@ from PIL import Image
 import cv2
 
 from center_surround.data import load_raw_data, create_dataloaders
-from center_surround.models import KlindtCoreReadout2D
+from center_surround.models.klindtSurround import KlindtCoreReadoutNMasks2D
 from center_surround.training import train
-from center_surround.utils import plot_kernels, plot_spatial_masks
+from center_surround.utils import plot_kernels, plot_spatial_masks_n
 from center_surround.utils import compute_lsta, plot_lsta_comparison_per_cell
 from center_surround.utils import (
     compute_metrics,
@@ -24,29 +24,37 @@ from center_surround.utils import (
     plot_grid_predictions,
 )
 
+# Model name
+model_name = "klindtSurround"
+
+# Data path
+data_path_file = "exp_13_data_4"
+
 # Device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {device}")
 
-# Create output directory with timestamp at the start
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-output_dir = f'/home/ridvan/Documents/center_surround/outputs/run_{timestamp}'
-os.makedirs(output_dir, exist_ok=True)
-print(f"Output directory: {output_dir}")
-
-# Load best hyperparameters
-with open('/home/ridvan/Documents/center_surround/outputs/hyperparam_results.pkl', 'rb') as f:
+# Load best hyperparameters from surround model search
+hyperparam_path = f'/home/ridvan/Documents/center_surround/outputs/{data_path_file}/{model_name}/hyperparam_results_latest.pkl'
+with open(hyperparam_path, 'rb') as f:
     results = pickle.load(f)
 
 best_params = results['best_params']
+print(f"Loaded hyperparameters from: {hyperparam_path}")
 print("Best hyperparameters:")
 for key, value in best_params.items():
     print(f"  {key}: {value}")
 
 # Load data
-data_path = "/home/ridvan/Documents/center_surround/data/exp_13_data_4.pkl"
+data_path = f"/home/ridvan/Documents/center_surround/data/{data_path_file}.pkl"
 raw_data = load_raw_data(data_path)
 dataloaders = create_dataloaders(raw_data, batch_size=32, normalize_images=True)
+
+# Create output directory with timestamp at the start
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+output_dir = f'/home/ridvan/Documents/center_surround/outputs/{data_path_file}/{model_name}/run_{timestamp}'
+os.makedirs(output_dir, exist_ok=True)
+print(f"Output directory: {output_dir}")
 
 # Get shapes
 images, responses = next(iter(dataloaders['train']))
@@ -65,22 +73,22 @@ picked_cells = [23, 27, 63, 75, 89, 90, 122, 129, 143, 148, 169, 212, 221, 312, 
                 1437, 1441, 1443, 1487, 1538, 1554, 1587, 1593, 1598, 1662, 1705]
 
 
-# Model configuration
+# Model configuration - using tuned hyperparameters from search
+# Using 2 spatial masks (center/surround) with 4 kernel channels
 model_config = {
     'image_size': input_size,
     'image_channels': in_channels,
     'kernel_sizes': [24, 24],
     'num_kernels': [4],
+    'num_masks': 2,  # 2 spatial masks: center and surround
     'act_fns': ['relu'],
     'init_scales': [[0.0, 0.01], [0.0, 0.001], [0.0, 0.01]],
-    'init_kernels': f"gaussian:0.28",  # single Gaussian (center only)
-    # 'init_kernels': f"gaussian:{best_params['init_kernels_sigma']}",  # single Gaussian (center only)
-    # 'init_kernels': "dog:0.15:0.4:0.6",  # DoG: center_sigma:surround_sigma:amp_ratio
+    'init_kernels': f"gaussian:{best_params['init_kernels_sigma']}",
     'num_neurons': num_neurons,
     'smoothness_reg': best_params['smoothness_reg'],
-    'sparsity_reg': 0,
-    'center_mass_reg': 0,#best_params['center_mass_reg'],
-    'mask_reg': 1e-4,
+    'sparsity_reg': best_params['sparsity_reg'],
+    'center_mass_reg': 0,
+    'mask_reg': best_params['mask_reg'],
     'weights_reg': best_params['weights_reg'],
     'dropout_rate': 0.2,
     'batch_norm': True,
@@ -106,8 +114,8 @@ with open(f'{output_dir}/config.pkl', 'wb') as f:
     pickle.dump(config, f)
 print(f"Config saved to {output_dir}/config.pkl")
 
-# Create model with best parameters
-model = KlindtCoreReadout2D(
+# Create model with best parameters (2 spatial masks for center/surround)
+model = KlindtCoreReadoutNMasks2D(
     image_size=model_config['image_size'],
     image_channels=model_config['image_channels'],
     kernel_sizes=model_config['kernel_sizes'],
@@ -116,6 +124,7 @@ model = KlindtCoreReadout2D(
     init_scales=model_config['init_scales'],
     init_kernels=model_config['init_kernels'],
     num_neurons=model_config['num_neurons'],
+    num_masks=model_config['num_masks'],
     smoothness_reg=model_config['smoothness_reg'],
     sparsity_reg=model_config['sparsity_reg'],
     center_mass_reg=model_config['center_mass_reg'],
@@ -131,10 +140,9 @@ model = KlindtCoreReadout2D(
     seed=model_config['seed'],
 )
 
-# Train with more epochs
+# Train with more epochs using tuned learning rate
 print("\nTraining final model...")
-# model = train(model, dataloaders, num_epochs=100, lr=best_params['learning_rate'], device=device, early_stopping=False)
-model = train(model, dataloaders, num_epochs=100, lr=0.02, device=device, early_stopping=False)
+model = train(model, dataloaders, num_epochs=100, lr=best_params['learning_rate'], device=device, early_stopping=False)
 
 # Check validation correlation first
 print("\nValidation set evaluation:")
@@ -183,9 +191,11 @@ plt.close(fig_example)
 
 # Plot grid predictions (all neurons)
 print("\nPlotting grid predictions...")
+grid_preds_dir = f'{output_dir}/grid_predictions'
+os.makedirs(grid_preds_dir, exist_ok=True)
 grid_figs = plot_grid_predictions(predictions, targets, correlations)
 for i, fig in enumerate(grid_figs):
-    fig.savefig(f'{output_dir}/grid_predictions_{i}.png', dpi=150, bbox_inches='tight')
+    fig.savefig(f'{grid_preds_dir}/grid_predictions_{i}.png', dpi=150, bbox_inches='tight')
     plt.close(fig)
 
 # Plot correlation vs reliability (with reliability-dependent plots)
@@ -231,11 +241,14 @@ fig3 = plot_kernels(model)
 fig3.savefig(f'{output_dir}/kernels.png', dpi=150, bbox_inches='tight')
 # plt.show()
 
-# Plot spatial masks
+# Plot spatial masks (N masks per neuron)
 print("\nPlotting spatial masks...")
-fig4 = plot_spatial_masks(model)
-fig4.savefig(f'{output_dir}/spatial_masks.png', dpi=150, bbox_inches='tight')
-# plt.show()
+spatial_masks_dir = f'{output_dir}/spatial_masks'
+os.makedirs(spatial_masks_dir, exist_ok=True)
+spatial_mask_figs = plot_spatial_masks_n(model, neurons_per_plot=8)
+for i, fig in enumerate(spatial_mask_figs):
+    fig.savefig(f'{spatial_masks_dir}/spatial_masks_{i}.png', dpi=150, bbox_inches='tight')
+    plt.close(fig)
 
 # Compute LSTA on NATURAL IMAGES (not test images)
 print("\nComputing LSTA...")

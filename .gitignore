@@ -1,6 +1,7 @@
 # Data and outputs
 data/
 outputs/
+notebooks/
 
 # Python
 __pycache__/

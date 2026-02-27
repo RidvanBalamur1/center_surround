@@ -77,7 +77,7 @@ class KlindtCore2D(nn.Module):
                         sigma = float(sigma_str)
                     except (IndexError, ValueError):
                         sigma = 0.2
-                    
+     
                     # Create 2D Gaussian template
                     yy, xx = torch.meshgrid(
                         torch.linspace(-1, 1, H),
@@ -86,20 +86,13 @@ class KlindtCore2D(nn.Module):
                     )
                     gaussian = torch.exp(-((xx**2 + yy**2) / (2 * sigma**2)))
                     gaussian = gaussian / gaussian.max()
-                    
+
                     # Initialize: Gaussian template × N(0, std)
                     init_noise = torch.randn_like(weight)
                     weight.copy_(init_noise * gaussian * init_scales[0][1])
             else:
-                # Truncated normal initialization
-                with torch.no_grad():
-                    weight = conv.weight
-                    size = weight.shape
-                    tmp = weight.new_empty(size + (4,)).normal_()
-                    valid = (tmp < 2) & (tmp > -2)
-                    ind = valid.max(-1, keepdim=True)[1]
-                    selected = tmp.gather(-1, ind).squeeze(-1)
-                    weight.copy_(selected.mul(init_scales[0][1]).add_(init_scales[0][0]))
+                # Simple default: small random weights
+                nn.init.normal_(conv.weight, mean=init_scales[0][0], std=init_scales[0][1])
             
             # Apply kernel constraint at init
             if kernel_constraint == 'norm':
@@ -352,12 +345,6 @@ class KlindtCoreReadout2D(nn.Module):
         x = self.core(x)
         x = self.readout(x)
         return x
-    # def regularizer(self) -> torch.Tensor:
-    #     print("Calling KlindtCoreReadout2D.regularizer()")
-    #     core_reg = self.core.regularizer()
-    #     print(f"Core reg done: {core_reg}")
-    #     readout_reg = self.readout.regularizer()
-    #     print(f"Readout reg done: {readout_reg}")
-    #     return core_reg + readout_reg
+    
     def regularizer(self) -> torch.Tensor:
         return self.core.regularizer() + self.readout.regularizer()
